@@ -9,20 +9,48 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"strconv"
+	"strings"
 )
 
-var (
-	themeIDs = []int{130}
+type ids []int
 
-	workDir string
+func (i *ids) String() string {
+	return fmt.Sprintf("%v", *i)
+}
+
+func (i *ids) Set(s string) error {
+	parts := strings.Split(s, ",")
+	if len(parts) == 0 {
+		return fmt.Errorf("empty ids")
+	}
+	res := make(ids, 0, len(parts))
+	for _, sid := range parts {
+		id, err := strconv.Atoi(sid)
+		if err != nil {
+			return fmt.Errorf("bad ids: %w", err)
+		}
+		res = append(res, id)
+	}
+	*i = res
+	return nil
+}
+
+var (
+	themeIDs ids
+	workDir  string
 )
 
 func init() {
+	flag.Var(&themeIDs, "ids", "pass list of theme ids (1,2,3)")
 	flag.StringVar(&workDir, "dir", "", "directory for storing data (temporary directory used)")
 }
 
 func main() {
 	flag.Parse()
+	if len(themeIDs) == 0 {
+		log.Fatalf("Expect not empty list of theme ids, got: %v", themeIDs)
+	}
 	if workDir == "" {
 		tmpDir, err := ioutil.TempDir("", "crawler")
 		if err != nil {
