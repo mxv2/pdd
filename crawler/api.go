@@ -4,11 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"strconv"
 )
-
-const userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.83 Safari/537.36"
 
 type client struct {
 	host      string
@@ -16,10 +15,9 @@ type client struct {
 	tClient   *http.Client
 }
 
-func newClient(authToken string) *client {
+func newClient() *client {
 	return &client{
-		host:      "https://profteh.com",
-		authToken: authToken,
+		host: "https://profteh.com",
 		tClient: &http.Client{
 			CheckRedirect: func(*http.Request, []*http.Request) error { return fmt.Errorf("no redirects") },
 		},
@@ -38,9 +36,8 @@ func (c *client) FetchTheme(id int) (theme, error) {
 	if err != nil {
 		return theme{}, err
 	}
-	req.Header.Add("Cookie", c.authToken)
-	req.Header.Add("User-Agent", userAgent)
 
+	log.Printf("Call API %s", req.URL)
 	resp, err := c.tClient.Do(req)
 	if err != nil {
 		return theme{}, err
@@ -91,9 +88,8 @@ func (c *client) FetchQuestions(id int) ([]question, error) {
 	if err != nil {
 		return []question{}, err
 	}
-	req.Header.Add("Cookie", c.authToken)
-	req.Header.Add("User-Agent", userAgent)
 
+	log.Printf("Call API %s", req.URL)
 	resp, err := c.tClient.Do(req)
 	if err != nil {
 		return []question{}, err
