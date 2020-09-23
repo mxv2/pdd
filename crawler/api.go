@@ -1,12 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
-	"strconv"
+	"strings"
 )
 
 type client struct {
@@ -68,13 +69,14 @@ type question struct {
 type options []string
 
 func (o *options) UnmarshalJSON(data []byte) error {
-	unquote, err := strconv.Unquote(string(data))
+	var s string
+	err := json.NewDecoder(bytes.NewReader(data)).Decode(&s)
 	if err != nil {
 		return err
 	}
 
 	var t []string
-	err = json.Unmarshal([]byte(unquote), &t)
+	err = json.NewDecoder(strings.NewReader(s)).Decode(&t)
 	if err != nil {
 		return err
 	}
