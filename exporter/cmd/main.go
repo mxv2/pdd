@@ -7,6 +7,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
@@ -41,8 +42,14 @@ func main() {
 
 	storage := &exporter.Storage{}
 
-	stmt, err := db.PrepareNamed(`INSERT INTO notes (id, guid, mid, mod, usn, tags, flds, sfld, csum, flags, data) 
+	noteStmt, err := db.PrepareNamed(`INSERT INTO notes (id, guid, mid, mod, usn, tags, flds, sfld, csum, flags, data) 
 VALUES (:mod, :guid, :mid, :mod, -1, '', :flds, :sfld, :csum, 0, '')`)
+	if err != nil {
+		panic(err)
+	}
+
+	cardStmt, err := db.PrepareNamed(`INSERT INTO cards(nid, did, ord, mod, usn, type, queue, due, ivl, factor, reps, lapses, "left", odue, odid, flags, data)
+VALUES (:nid, :did, 0, :mod, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, '');`)
 	if err != nil {
 		panic(err)
 	}
@@ -109,7 +116,7 @@ VALUES (:mod, :guid, :mid, :mod, -1, '', :flds, :sfld, :csum, 0, '')`)
 
 		note := exporter.NewNote(deckID, noteWriter.String(), answer)
 
-		type dto struct {
+		type noteDTO struct {
 			ID            int64  `db:"mod"`
 			GUID          string `db:"guid"`
 			ModelID       int64  `db:"mid"`
@@ -117,7 +124,7 @@ VALUES (:mod, :guid, :mid, :mod, -1, '', :flds, :sfld, :csum, 0, '')`)
 			StripedFields string `db:"sfld"`
 			Checksum      uint32 `db:"csum"`
 		}
-		_, err = stmt.Exec(dto{
+		_, err = noteStmt.Exec(noteDTO{
 			ID:            note.ID(),
 			GUID:          note.GUID(),
 			ModelID:       modelID,
@@ -128,6 +135,21 @@ VALUES (:mod, :guid, :mid, :mod, -1, '', :flds, :sfld, :csum, 0, '')`)
 		if err != nil {
 			return err
 		}
+
+		type cardDTO struct {
+			ID     int64 `db:"mod"`
+			DeckID int64 `db:"did"`
+			NoteID int64 `db:"nid"`
+		}
+		_, err = cardStmt.Exec(cardDTO{
+			ID:     time.Now().Unix(),
+			DeckID: deckID,
+			NoteID: note.ID(),
+		})
+		if err != nil {
+			return err
+		}
+
 		return filepath.SkipDir
 	})
 	if err != nil {
