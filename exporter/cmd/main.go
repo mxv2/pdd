@@ -1,7 +1,11 @@
 package main
 
 import (
+	"archive/zip"
 	"bufio"
+	"bytes"
+	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"path"
@@ -18,10 +22,10 @@ import (
 func main() {
 	const outputDir = "output"
 	_, err := os.Stat(outputDir)
-	if err != nil {
+	if err == nil {
 		os.RemoveAll(outputDir)
 	}
-	if err != nil || os.IsNotExist(err) {
+	if err == nil || os.IsNotExist(err) {
 		os.Mkdir(outputDir, os.ModePerm)
 	}
 
@@ -168,4 +172,43 @@ VALUES (:nid, :did, 0, :mod, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, '');`)
 		log.Fatalf("Add images index: failed cause %s", err)
 	}
 	log.Println("Add images index: success")
+
+	buf := new(bytes.Buffer)
+	w := zip.NewWriter(buf)
+	err = filepath.Walk(outputDir, func(path string, info os.FileInfo, err error) error {
+		if info.IsDir() {
+			return nil
+		}
+
+		source, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer source.Close()
+
+		target, err := w.Create(info.Name())
+		if err != nil {
+			return err
+		}
+
+		_, err = io.Copy(target, source)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = w.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = ioutil.WriteFile(path.Join(outputDir, "PDD.apkg"), buf.Bytes(), os.ModePerm)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("Write zip archive: success")
 }
