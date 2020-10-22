@@ -2,9 +2,9 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"log"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -15,12 +15,20 @@ import (
 )
 
 func main() {
-	const database = "test.db"
+	const outputDir = "output"
+	_, err := os.Stat(outputDir)
+	if err != nil {
+		os.RemoveAll(outputDir)
+	}
+	if err != nil || os.IsNotExist(err) {
+		os.Mkdir(outputDir, os.ModePerm)
+	}
+
+	database := path.Join(outputDir, "collection.anki2")
 	//const database = ":memory:"
 	db := sqlx.MustOpen("sqlite3", database)
 
-	ctx := context.Background()
-	_, err := sqlx.LoadFileContext(ctx, db, "init.sql")
+	_, err = sqlx.LoadFile(db, "init.sql")
 	if err != nil {
 		panic(err)
 	}
@@ -31,7 +39,9 @@ func main() {
 	const modelID = 1592507431253
 	const deckID = 1595179860403
 
-	stmt, err := db.PrepareNamedContext(ctx, `INSERT INTO notes (id, guid, mid, mod, usn, tags, flds, sfld, csum, flags, data) 
+	storage := &exporter.Storage{}
+
+	stmt, err := db.PrepareNamed(`INSERT INTO notes (id, guid, mid, mod, usn, tags, flds, sfld, csum, flags, data) 
 VALUES (:mod, :guid, :mid, :mod, -1, '', :flds, :sfld, :csum, 0, '')`)
 	if err != nil {
 		panic(err)
@@ -52,15 +62,28 @@ VALUES (:mod, :guid, :mid, :mod, -1, '', :flds, :sfld, :csum, 0, '')`)
 		}
 		defer file.Close()
 
-		image := filepath.Join(path, "image.jpg")
-		if _, err := os.Stat(filepath.Join(path, "image.jpg")); os.IsNotExist(err) {
-			image = ""
+		imagePath, err := filepath.Abs(filepath.Join(path, "image.jpg"))
+		if err != nil {
+			return err
+		}
+		_, err = os.Stat(imagePath)
+		if os.IsNotExist(err) {
+			imagePath = ""
+		}
+		if err != nil {
+			return err
 		}
 
 		answer := ""
 		noteWriter := &exporter.NoteWriter{}
 
-		noteWriter.WriteImage(image)
+		var imageID string
+		if imagePath != "" {
+			imageID = storage.AddImage(imagePath)
+		}
+		if imageID != "" {
+			noteWriter.WriteImage(imageID)
+		}
 
 		var block string
 		r := bufio.NewScanner(file)
@@ -94,7 +117,7 @@ VALUES (:mod, :guid, :mid, :mod, -1, '', :flds, :sfld, :csum, 0, '')`)
 			StripedFields string `db:"sfld"`
 			Checksum      uint32 `db:"csum"`
 		}
-		_, err = stmt.ExecContext(ctx, dto{
+		_, err = stmt.Exec(dto{
 			ID:            note.ID(),
 			GUID:          note.GUID(),
 			ModelID:       modelID,
@@ -111,4 +134,16 @@ VALUES (:mod, :guid, :mid, :mod, -1, '', :flds, :sfld, :csum, 0, '')`)
 		log.Fatalf("Add notes: failed cause %s", err)
 	}
 	log.Println("Add notes: success")
+
+	err = storage.WriteFiles(outputDir)
+	if err != nil {
+		log.Fatalf("Add images: failed cause %s", err)
+	}
+	log.Println("Add images: success")
+
+	err = storage.WriteHashFile(outputDir)
+	if err != nil {
+		log.Fatalf("Add images index: failed cause %s", err)
+	}
+	log.Println("Add images index: success")
 }
