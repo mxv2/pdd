@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bufio"
 	"bytes"
+	"flag"
 	"io"
 	"io/ioutil"
 	"log"
@@ -19,45 +20,61 @@ import (
 	"exporter"
 )
 
+const (
+	database = "collection.anki2"
+)
+
+var (
+	data = flag.String("data", "data", "source data directory")
+	out  = flag.String("out", "out", "directory for output data")
+	name = flag.String("name", "PDD.apkg", "name of the target .apkg file")
+
+	model = flag.Int64("model", 1592507431253, "model - target model ID in Anki")
+	deck  = flag.Int64("deck", 1595179860403, "deck - target deck ID in Anki")
+)
+
 func main() {
-	const outputDir = "output"
-	_, err := os.Stat(outputDir)
-	if err == nil {
-		os.RemoveAll(outputDir)
+	flag.Parse()
+	if out == nil || *out == "" {
+		log.Fatalf("out should not be empty")
 	}
-	if err == nil || os.IsNotExist(err) {
-		os.Mkdir(outputDir, os.ModePerm)
+	outputDir := *out
+	if data == nil || *data == "" {
+		log.Fatalf("data should not be empty")
 	}
+	dataDir := *data
+	if name == nil || *name == "" {
+		log.Fatalf("name should not be empty")
+	}
+	outputName := *name
+	if model == nil || *model == 0 {
+		log.Fatalf("model should not be 0")
+	}
+	modelID := *model
+	if deck == nil || *deck == 0 {
+		log.Fatalf("deck should not be 0")
+	}
+	deckID := *deck
 
-	database := path.Join(outputDir, "collection.anki2")
-	//const database = ":memory:"
-	db := sqlx.MustOpen("sqlite3", database)
-
-	_, err = sqlx.LoadFile(db, "init.sql")
+	dbFile := path.Join(outputDir, database)
+	db := sqlx.MustOpen("sqlite3", dbFile)
+	_, err := sqlx.LoadFile(db, "init.sql")
 	if err != nil {
-		panic(err)
+		log.Fatalf("Init db: %s", err)
 	}
-
-	log.Println("Init db: success")
-
-	const dataDir = "../testdata"
-	const modelID = 1592507431253
-	const deckID = 1595179860403
-
-	storage := &exporter.Storage{}
-
 	noteStmt, err := db.PrepareNamed(`INSERT INTO notes (id, guid, mid, mod, usn, tags, flds, sfld, csum, flags, data) 
 VALUES (:mod, :guid, :mid, :mod, -1, '', :flds, :sfld, :csum, 0, '')`)
 	if err != nil {
-		panic(err)
+		log.Fatalf("Init db: %s", err)
 	}
-
 	cardStmt, err := db.PrepareNamed(`INSERT INTO cards(nid, did, ord, mod, usn, type, queue, due, ivl, factor, reps, lapses, "left", odue, odid, flags, data)
 VALUES (:nid, :did, 0, :mod, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, '');`)
 	if err != nil {
-		panic(err)
+		log.Fatalf("Init db: %s", err)
 	}
+	log.Println("Init db: success")
 
+	storage := &exporter.Storage{}
 	err = filepath.Walk(dataDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -206,7 +223,7 @@ VALUES (:nid, :did, 0, :mod, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, '');`)
 		log.Fatal(err)
 	}
 
-	err = ioutil.WriteFile(path.Join(outputDir, "PDD.apkg"), buf.Bytes(), os.ModePerm)
+	err = ioutil.WriteFile(path.Join(outputDir, outputName), buf.Bytes(), os.ModePerm)
 	if err != nil {
 		log.Fatal(err)
 	}
