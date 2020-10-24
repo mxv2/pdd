@@ -105,6 +105,7 @@ VALUES (:nid, :did, 0, :mod, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, '');`)
 		}
 		if imageID != "" {
 			noteWriter.WriteImage(imageID)
+			noteWriter.WriteNewLine()
 		}
 
 		var block string
@@ -123,7 +124,11 @@ VALUES (:nid, :did, 0, :mod, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, '');`)
 
 			switch block {
 			case "Q:":
-				noteWriter.WriteString(line)
+				if line == "" {
+					noteWriter.WriteNewLine()
+				} else {
+					noteWriter.WriteString(line)
+				}
 			case "A:":
 				answer += line
 			}
