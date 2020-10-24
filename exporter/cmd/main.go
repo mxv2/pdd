@@ -90,16 +90,10 @@ VALUES (:nid, :did, 0, :mod, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, '');`)
 		}
 		defer file.Close()
 
-		imagePath, err := filepath.Abs(filepath.Join(path, "image.jpg"))
-		if err != nil {
-			return err
-		}
+		imagePath := filepath.Join(path, "image.jpg")
 		_, err = os.Stat(imagePath)
-		if os.IsNotExist(err) {
-			imagePath = ""
-		}
 		if err != nil {
-			return err
+			imagePath = ""
 		}
 
 		answer := ""
